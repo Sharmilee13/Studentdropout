@@ -22,14 +22,14 @@ try:
         "kmeans": pickle.load(open("models/kmeans.pkl", "rb")),
     }
     columns = pickle.load(open("models/columns.pkl", "rb"))
-    print("✅ All models and columns loaded successfully.")
+    print("OK: All models and columns loaded successfully.")
 except Exception as e:
-    print(f"❌ Error loading models: {e}")
+    print(f"Error loading models: {e}")
 
 # --- 2. LOAD DATASET ---
 X_test, y_test = None, None
 try:
-    path = r"C:\Users\prust\OneDrive\Desktop\codebase\student dropout\data\Dropout (1).csv"
+    path = r"C:\Users\hp\CODEBASE\Projects\DropOut - ML\Studentdropout\data\Dropout (1).csv"
     test_df = pd.read_csv(path)
     
     # Clean headers
@@ -47,14 +47,14 @@ try:
         y_test = test_df.iloc[:, -1]
 
     X_test = test_df[columns].fillna(0)
-    print("✅ Test data matched and labels mapped.")
+    print("OK: Test data matched and labels mapped.")
 except Exception as e:
-    print(f"⚠️ Data Loading Error: {e}")
+    print(f"Data loading warning: {e}")
 
 # --- 3. ROUTES ---
 @app.route('/')
 def home():
-    return "Flask backend is running 🚀"
+    return "Flask backend is running"
 @app.route('/predict', methods=['POST'])
 def predict():
     try:

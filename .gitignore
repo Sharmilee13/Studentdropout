@@ -1,0 +1,39 @@
+# -------------------
+# Node / Next.js
+# -------------------
+dropout-frontend/node_modules
+dropout-frontend/.next
+dropout-frontend/out
+
+# logs
+*.log
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# -------------------
+# Python
+# -------------------
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Flask / general
+instance/
+*.sqlite3
+
+# -------------------
+# OS / IDE
+# -------------------
+.DS_Store
+.vscode/
+.idea/
+
+# -------------------
+# Optional
+# -------------------
+coverage/
