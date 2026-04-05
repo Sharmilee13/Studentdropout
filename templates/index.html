@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Dropout Prediction</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: linear-gradient(to right, #1f4037, #99f2c8);
+            font-family: Arial;
+        }
+        .card {
+            border-radius: 20px;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+        .btn-custom {
+            background-color: #1f4037;
+            color: white;
+            font-weight: bold;
+        }
+        .btn-custom:hover {
+            background-color: #145c50;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container mt-4">
+    <h2>🎓 Student Dropout Prediction Dashboard</h2>
+
+    <div class="card shadow">
+
+        <form action="/predict" method="post">
+
+            <!-- MODEL SELECT -->
+            <div class="mb-3">
+                <label class="form-label"><b>Select Model (Objective)</b></label>
+                <select name="model" class="form-control">
+                    <option value="xgb">Early Prediction (XGBoost)</option>
+                    <option value="rf">Financial Analysis (Random Forest + SHAP)</option>
+                    <option value="rf_bal">At-Risk Detection (Balanced RF)</option>
+                    <option value="dt">Explainable AI (Decision Tree)</option>
+                    <option value="logistic">Lightweight Model</option>
+                    <option value="lgb">LightGBM</option>
+                    <option value="kmeans">Silent Dropout Detection</option>
+                </select>
+            </div>
+
+            <hr>
+
+            <!-- INPUT FIELDS -->
+            <div class="row">
+
+                <!-- LEFT COLUMN -->
+                <div class="col-md-6">
+
+                    <input type="number" step="any" name="f1" class="form-control mb-2" placeholder="Marital Status">
+                    <input type="number" step="any" name="f2" class="form-control mb-2" placeholder="Application Mode">
+                    <input type="number" step="any" name="f3" class="form-control mb-2" placeholder="Application Order">
+                    <input type="number" step="any" name="f4" class="form-control mb-2" placeholder="Course">
+                    <input type="number" step="any" name="f5" class="form-control mb-2" placeholder="Daytime/Evening Attendance">
+                    <input type="number" step="any" name="f6" class="form-control mb-2" placeholder="Previous Qualification">
+                    <input type="number" step="any" name="f7" class="form-control mb-2" placeholder="Previous Qualification Grade">
+                    <input type="number" step="any" name="f8" class="form-control mb-2" placeholder="Nationality">
+                    <input type="number" step="any" name="f9" class="form-control mb-2" placeholder="Mother Qualification">
+                    <input type="number" step="any" name="f10" class="form-control mb-2" placeholder="Father Qualification">
+                    <input type="number" step="any" name="f11" class="form-control mb-2" placeholder="Mother Occupation">
+                    <input type="number" step="any" name="f12" class="form-control mb-2" placeholder="Father Occupation">
+                    <input type="number" step="any" name="f13" class="form-control mb-2" placeholder="Admission Grade">
+                    <input type="number" step="any" name="f14" class="form-control mb-2" placeholder="Displaced">
+                    <input type="number" step="any" name="f15" class="form-control mb-2" placeholder="Special Needs">
+                    <input type="number" step="any" name="f16" class="form-control mb-2" placeholder="Debtor">
+                    <input type="number" step="any" name="f17" class="form-control mb-2" placeholder="Tuition Fees Up to Date">
+                    <input type="number" step="any" name="f18" class="form-control mb-2" placeholder="Gender">
+
+                </div>
+
+                <!-- RIGHT COLUMN -->
+                <div class="col-md-6">
+
+                    <input type="number" step="any" name="f19" class="form-control mb-2" placeholder="Scholarship Holder">
+                    <input type="number" step="any" name="f20" class="form-control mb-2" placeholder="Age at Enrollment">
+                    <input type="number" step="any" name="f21" class="form-control mb-2" placeholder="International">
+
+                    <input type="number" step="any" name="f22" class="form-control mb-2" placeholder="1st Sem Credited">
+                    <input type="number" step="any" name="f23" class="form-control mb-2" placeholder="1st Sem Enrolled">
+                    <input type="number" step="any" name="f24" class="form-control mb-2" placeholder="1st Sem Evaluations">
+                    <input type="number" step="any" name="f25" class="form-control mb-2" placeholder="1st Sem Approved">
+                    <input type="number" step="any" name="f26" class="form-control mb-2" placeholder="1st Sem Grade">
+                    <input type="number" step="any" name="f27" class="form-control mb-2" placeholder="1st Sem Without Evaluations">
+
+                    <input type="number" step="any" name="f28" class="form-control mb-2" placeholder="2nd Sem Credited">
+                    <input type="number" step="any" name="f29" class="form-control mb-2" placeholder="2nd Sem Enrolled">
+                    <input type="number" step="any" name="f30" class="form-control mb-2" placeholder="2nd Sem Evaluations">
+                    <input type="number" step="any" name="f31" class="form-control mb-2" placeholder="2nd Sem Approved">
+                    <input type="number" step="any" name="f32" class="form-control mb-2" placeholder="2nd Sem Grade">
+                    <input type="number" step="any" name="f33" class="form-control mb-2" placeholder="2nd Sem Without Evaluations">
+
+                    <input type="number" step="any" name="f34" class="form-control mb-2" placeholder="Unemployment Rate">
+                    <input type="number" step="any" name="f35" class="form-control mb-2" placeholder="Inflation Rate">
+                    <input type="number" step="any" name="f36" class="form-control mb-2" placeholder="GDP">
+
+                </div>
+            </div>
+
+            <br>
+            <button type="submit" class="btn btn-custom w-100">Predict</button>
+
+        </form>
+    </div>
+</div>
+
+</body>
+</html>
