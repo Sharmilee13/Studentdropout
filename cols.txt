@@ -1,0 +1,36 @@
+marital status
+application mode
+application order
+course
+daytime/evening attendance
+previous qualification
+previous qualification (grade)
+nacionality
+mother's qualification
+father's qualification
+mother's occupation
+father's occupation
+admission grade
+displaced
+educational special needs
+debtor
+tuition fees up to date
+gender
+scholarship holder
+age at enrollment
+international
+curricular units 1st sem (credited)
+curricular units 1st sem (enrolled)
+curricular units 1st sem (evaluations)
+curricular units 1st sem (approved)
+curricular units 1st sem (grade)
+curricular units 1st sem (without evaluations)
+curricular units 2nd sem (credited)
+curricular units 2nd sem (enrolled)
+curricular units 2nd sem (evaluations)
+curricular units 2nd sem (approved)
+curricular units 2nd sem (grade)
+curricular units 2nd sem (without evaluations)
+unemployment rate
+inflation rate
+gdp
