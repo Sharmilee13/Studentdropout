@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from flask_cors import CORS
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, silhouette_score
+import os
 
 app = Flask(__name__)
 
@@ -29,8 +30,9 @@ except Exception as e:
 # --- 2. LOAD DATASET ---
 X_test, y_test = None, None
 try:
-    path = r"C:\Users\hp\CODEBASE\Projects\DropOut - ML\Studentdropout\data\Dropout (1).csv"
-    test_df = pd.read_csv(path)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(base_dir, "data", "Dropout (1).csv")
+    test_df = pd.read_csv(data_path)
     
     # Clean headers
     test_df.columns = test_df.columns.str.strip().str.lower()
@@ -97,7 +99,8 @@ def get_metrics():
             if name == "kmeans":
                 # K-Means Specific Metrics
                 cluster_labels = model.predict(X_eval)
-                sil = silhouette_score(X_eval, cluster_labels, sample_size=1000)
+                sample_size = min(1000, int(getattr(X_eval, "shape", [0])[0] or 0))
+                sil = silhouette_score(X_eval, cluster_labels, sample_size=sample_size) if sample_size >= 2 else float("nan")
                 
                 unsupervised_list.append({
                     "name": "K-Means Clustering",

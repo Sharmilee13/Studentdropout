@@ -14,14 +14,10 @@ Below is a detailed overview of the core project objectives and how they are cur
 - The model outputs whether the student is predicted as **"Dropout Risk"**, **"Enrolled"**, or **"Graduate"**, alongside a **Confidence Score** representing the probability of that prediction.
 
 ## Objective 2: Student Profiling & Risk Clustering (Unsupervised Learning)
-**Goal:** To group students into clusters based purely on their behaviors and backgrounds without giving the model pre-labelled outcomes to find hidden subgroups/personas.
-**Implementation:** 
-- The project implements **K-Means Clustering** (an unsupervised model).
-- Through the API, a new student's data can be evaluated by the K-Means model to output a specific cluster label (0, 1, or 2).
-- The `/cluster-info` endpoint explains these personas: 
-  - **Cluster 0:** High-Risk Behavior Pattern 
-  - **Cluster 1:** Stable / Typical Enrolled 
-  - **Cluster 2:** High Performers
+**Goal:** To provide explainability by determining which student attributes influence predictions most strongly at a cohort level.
+**Implementation:**
+- The Flask backend exposes `/importance`, which uses the trained **Random Forest** model’s `feature_importances_` to compute the top drivers.
+- The frontend consumes this list and visualizes it as “Underlying drivers” (donut + ranking + bars), tagging finance-related signals.
 
 ## Objective 3: Model Evaluation and Comparison
 **Goal:** To track, evaluate, and compare how well each machine learning algorithm is performing to choose the best one.
@@ -32,10 +28,10 @@ Below is a detailed overview of the core project objectives and how they are cur
 - This data is then sent to the frontend to visually compare models on a metrics board.
 
 ## Objective 4: Feature Importance (Identify Key Dropout Factors)
-**Goal:** To provide explainability by determining which student attributes heavily influence the risk of dropping out.
-**Implementation:** 
-- The `/importance` backend route uses the trained **Random Forest** model's internal structure (`feature_importances_`) to extract the top 10 most critical input features.
-- It returns these top features (e.g., previous grades, tuition up-to-date status, etc.) as percentages, which the frontend charts to show educators what factors to pay attention to.
+**Goal:** To provide an interactive “decision support” style assistant panel for counselors using the analyzed student profile.
+**Implementation:**
+- Implemented as a **rule-based UI chatbot** in the Next.js frontend (no LLM call).
+- It uses a few key fields (e.g., debtor / tuition flags / Semester‑1 grade) plus the computed risk score to respond with intervention suggestions and factor explanations.
 
 ## Objective 5: Full-Stack Integration & API Architecture
 **Goal:** To integrate the machine learning logic into an accessible format through a REST API.
@@ -45,7 +41,7 @@ Below is a detailed overview of the core project objectives and how they are cur
 - It handles complex data pipelines, maps the correct column headers, formats the payload using pandas DataFrames, cleans empty variables, and wraps model predictions into standard JSON objects.
 
 ## Objective 6: Interactive Dashboard Output
-**Goal:** To provide a responsive interface for end-users (like administrators or teachers) to interact with the models without needing coding knowledge.
-**Implementation:** 
-- Handled primarily by the **Next.js React frontend** (located in the `dropout-frontend` folder). 
-- It consumes the Flask backend REST API to allow users to generate predictions, view which cluster a student belongs to, interpret feature importance graphs, and view evaluation metrics cleanly via robust UI components.
+**Goal:** To group students into clusters based purely on their behaviors and backgrounds (unsupervised) and surface “silent dropout” patterns.
+**Implementation:**
+- Uses **K-Means** (`models/kmeans.pkl`) via the shared `/predict` route when `model = "kmeans"`.
+- The `/cluster-info` endpoint returns cluster personas (0–2), which the frontend renders in Objective 6 (“Silent / behavior”).

@@ -34,9 +34,11 @@ import {
   ClipboardList,
   Package,
   SlidersHorizontal,
+  Fingerprint,
+  Eye,
   Download
 } from "lucide-react";
-import { downloadEduGuardObjectivesPdf, type PdfReportInput } from "../lib/objectivesPdf";
+import { downloadEduGuardObjectivesPdf } from "../lib/objectivesPdf";
 import {
   PieChart,
   Pie,
@@ -105,11 +107,9 @@ const GaugeChart = ({ score }: { score: number }) => {
       <div className="relative w-64 h-32 overflow-hidden">
         <svg viewBox="0 0 200 100" className="w-full h-full transform transition-transform duration-1000 ease-out">
           <path d="M 20 90 A 70 70 0 0 1 180 90" fill="none" stroke="#1e293b" strokeWidth={strokeWidth} strokeLinecap="round" />
-          {/* Color Guides */}
           <path d="M 20 90 A 70 70 0 0 1 70 28" fill="none" stroke="#064e3b" strokeWidth={strokeWidth} strokeLinecap="round" />
           <path d="M 70 28 A 70 70 0 0 1 130 28" fill="none" stroke="#78350f" strokeWidth={strokeWidth} strokeLinecap="round" />
           <path d="M 130 28 A 70 70 0 0 1 180 90" fill="none" stroke="#7f1d1d" strokeWidth={strokeWidth} strokeLinecap="round" />
-          {/* Needle / Score value */}
           <path d="M 20 90 A 70 70 0 0 1 180 90" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} className="transition-all duration-1000 ease-out" />
         </svg>
       </div>
@@ -441,317 +441,6 @@ function buildStrictClassificationContext(predictions: PredictionsForStrict, inp
     rf,
     logC,
   };
-}
-
-type CounselorPredictions = {
-  rfConfidence: number;
-  rfVerdict: string;
-  logisticConfidence: number;
-  rfBalVerdict: string;
-  rfBalConfidence: number;
-};
-
-function normFeatureKey(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function featureIndexForImportanceName(apiName: string): number | null {
-  const k = normFeatureKey(apiName);
-  for (let i = 0; i < FEATURE_DICT.length; i++) {
-    if (normFeatureKey(FEATURE_DICT[i].name) === k) return i;
-  }
-  for (let i = 0; i < FEATURE_DICT.length; i++) {
-    const dk = normFeatureKey(FEATURE_DICT[i].name);
-    if (dk.length >= 8 && (k.includes(dk) || dk.includes(k))) return i;
-  }
-  return null;
-}
-
-function formatProfileFieldDisplay(idx: number, raw: string): string {
-  if (raw === "") return "—";
-  const f = FEATURE_DICT[idx];
-  if (f.type === "select" && f.options) {
-    const n = parseInt(raw, 10);
-    if (!Number.isNaN(n) && f.options[n as keyof typeof f.options] != null) {
-      return String(f.options[n as keyof typeof f.options]);
-    }
-  }
-  return raw;
-}
-
-function buildCounselorGuidance(
-  inputs: string[],
-  p: CounselorPredictions,
-  driversSorted: { name: string; value: number | string }[]
-) {
-  const pdfBullets: string[] = [];
-  const profileAlerts: { title: string; body: string; tone: "bad" | "warn" | "ok" }[] = [];
-
-  const debtor = inputs[15] === "1";
-  const sem1 = parseFloat(inputs[25] || "");
-  const approved1 = parseFloat(inputs[24] || "");
-  const enrolled1 = parseFloat(inputs[22] || "");
-  const evals1 = parseFloat(inputs[23] || "");
-  const noEval = parseFloat(inputs[26] || "");
-  const scholarship = inputs[18] === "1";
-  const displaced = inputs[13] === "1";
-  const specialNeeds = inputs[14] === "1";
-
-  if (debtor) {
-    profileAlerts.push({
-      title: "Debtor",
-      body: "Institutional debt is set. Connect with the bursar / financial office before holds block progress.",
-      tone: "bad",
-    });
-    pdfBullets.push("Profile: debtor flag — coordinate payment plan or aid.");
-  }
-  if (inputs[16] === "0") {
-    profileAlerts.push({
-      title: "Tuition not up to date",
-      body: "Fees are not recorded as current — a common driver of withdrawal even when grades are middling.",
-      tone: "bad",
-    });
-    pdfBullets.push("Profile: tuition not up to date — verify payment status.");
-  }
-  if (!Number.isNaN(sem1) && sem1 > 0 && sem1 < 10) {
-    profileAlerts.push({
-      title: "CU 1st Sem Grade",
-      body: `Average ${sem1.toFixed(1)}/20 is under a typical pass line — academic advising and tutoring should lead.`,
-      tone: "bad",
-    });
-    pdfBullets.push(`Profile: 1st-semester average ${sem1.toFixed(1)}/20 — academic support priority.`);
-  }
-  if (!Number.isNaN(enrolled1) && enrolled1 > 0 && !Number.isNaN(approved1) && approved1 / enrolled1 < 0.5) {
-    profileAlerts.push({
-      title: "Low pass rate (1st sem)",
-      body: `Only ${approved1.toFixed(0)} of ${enrolled1.toFixed(0)} enrolled units approved — credit accumulation at risk.`,
-      tone: "warn",
-    });
-    pdfBullets.push("Profile: low first-semester approval vs enrollment.");
-  }
-  if (!Number.isNaN(enrolled1) && enrolled1 > 0 && !Number.isNaN(evals1) && evals1 / enrolled1 < 0.55) {
-    profileAlerts.push({
-      title: "Thin evaluations (1st sem)",
-      body: "Few evaluations relative to enrolled units — check attendance and assessment participation.",
-      tone: "warn",
-    });
-    pdfBullets.push("Profile: thin evaluation participation in semester 1.");
-  }
-  if (!Number.isNaN(noEval) && noEval >= 2) {
-    profileAlerts.push({
-      title: "Units without evaluations",
-      body: `${noEval.toFixed(0)} first-semester units lack evaluations — disengagement can hide until late.`,
-      tone: "warn",
-    });
-    pdfBullets.push("Profile: multiple units without evaluations.");
-  }
-  if (!scholarship && debtor) {
-    profileAlerts.push({
-      title: "Debt without scholarship",
-      body: "No scholarship combined with debtor status increases exposure to financial shock.",
-      tone: "warn",
-    });
-    pdfBullets.push("Profile: debtor and no scholarship.");
-  }
-  if (displaced) {
-    profileAlerts.push({
-      title: "Displaced",
-      body: "Living away from home support networks can add stress not visible in grades alone.",
-      tone: "warn",
-    });
-  }
-  if (specialNeeds) {
-    profileAlerts.push({
-      title: "Educational special needs",
-      body: "Ensure accommodations are active and staff are aware — barriers can compound other risks.",
-      tone: "warn",
-    });
-  }
-
-  if (profileAlerts.length === 0) {
-    profileAlerts.push({
-      title: "No extreme profile flags",
-      body: `No debtor/tuition red flags or failing 1st-semester average from the fields we scan. Overview risk score is ${(p.rfConfidence * 100).toFixed(0)}% (normalized).`,
-      tone: "ok",
-    });
-    pdfBullets.push("No high-priority profile alerts from scanned fields; monitor holistically.");
-  }
-
-  const modelSummary = [
-    {
-      label: "Random Forest (Objective 1)",
-      text: `${p.rfVerdict || "—"} · normalized dropout-oriented score ${(p.rfConfidence * 100).toFixed(0)}%`,
-    },
-    {
-      label: "Balanced RF (Objective 3)",
-      text: `${p.rfBalVerdict || "—"} · strict-aligned score ${(p.rfBalConfidence * 100).toFixed(0)}%`,
-    },
-    {
-      label: "Logistic (Objective 5)",
-      text: `Early-warning score ${(p.logisticConfidence * 100).toFixed(0)}% (50% threshold in UI)`,
-    },
-  ];
-  pdfBullets.push(
-    `Models: RF ${p.rfVerdict || "N/A"} (${(p.rfConfidence * 100).toFixed(0)}%); strict RF ${p.rfBalVerdict || "N/A"}; logistic ${(p.logisticConfidence * 100).toFixed(0)}%.`
-  );
-
-  const interventions: string[] = [];
-  if (debtor || inputs[16] === "0") {
-    interventions.push("Financial aid / bursar: payment plan, emergency fund eligibility, hold review.");
-  }
-  if (!Number.isNaN(sem1) && sem1 > 0 && sem1 < 10) {
-    interventions.push("Academic: advising, tutoring, and course-load review for semester 1.");
-  }
-  if (
-    (!Number.isNaN(noEval) && noEval >= 2) ||
-    (!Number.isNaN(enrolled1) && enrolled1 > 0 && !Number.isNaN(evals1) && evals1 / enrolled1 < 0.55)
-  ) {
-    interventions.push("Engagement: confirm attendance and evaluation completion with instructors.");
-  }
-  if (interventions.length === 0) {
-    interventions.push("General: brief wellness check-in; confirm data accuracy in SIS.");
-  }
-  interventions.forEach((x) => pdfBullets.push(`Action: ${x}`));
-
-  const importanceTop = driversSorted.slice(0, 10).map((d) => ({
-    name: d.name,
-    value: Number(d.value),
-    idx: featureIndexForImportanceName(d.name),
-  }));
-
-  return { profileAlerts, modelSummary, interventions, importanceTop, pdfBullets };
-}
-
-function Objective4GuidancePanel({
-  isAnalyzed,
-  inputs,
-  predictions,
-  driversSorted,
-}: {
-  isAnalyzed: boolean;
-  inputs: string[];
-  predictions: CounselorPredictions;
-  driversSorted: { name: string; value: number | string }[];
-}) {
-  const g = useMemo(
-    () => buildCounselorGuidance(inputs, predictions, driversSorted),
-    [inputs, predictions, driversSorted]
-  );
-
-  const maxImp = useMemo(() => {
-    const v = g.importanceTop.map((r) => r.value);
-    return Math.max(1, ...v);
-  }, [g.importanceTop]);
-
-  if (!isAnalyzed) {
-    return (
-      <div className="rounded-3xl border border-dashed border-slate-600 bg-slate-900/30 p-12 text-center text-sm text-slate-500">
-        Build and analyze a profile in the Profile tab to see tailored guidance and feature importance.
-      </div>
-    );
-  }
-
-  const toneBorder = (t: "bad" | "warn" | "ok") =>
-    t === "bad"
-      ? "border-rose-500/30 bg-rose-950/15"
-      : t === "warn"
-        ? "border-amber-500/25 bg-amber-950/10"
-        : "border-emerald-500/20 bg-emerald-950/10";
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
-        <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-purple-400">
-          <BrainCircuit className="h-4 w-4" />
-          Model readouts (this student)
-        </div>
-        <ul className="space-y-3">
-          {g.modelSummary.map((row) => (
-            <li key={row.label} className="rounded-xl border border-slate-700/80 bg-slate-950/50 px-4 py-3 text-sm">
-              <span className="font-bold text-white">{row.label}</span>
-              <p className="mt-1 text-slate-400">{row.text}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
-        <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
-          <ClipboardList className="h-4 w-4 text-amber-400" />
-          Profile-based messages
-        </div>
-        <p className="mb-4 text-xs text-slate-500">
-          Generated from your inputs (finance, semester 1 engagement, grades). Updates automatically when the profile changes.
-        </p>
-        <ul className="space-y-3">
-          {g.profileAlerts.map((a) => (
-            <li key={a.title} className={`rounded-xl border px-4 py-3 text-sm ${toneBorder(a.tone)}`}>
-              <span className="font-bold text-white">{a.title}</span>
-              <p className="mt-1 text-slate-400">{a.body}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="rounded-3xl border border-indigo-500/20 bg-indigo-950/15 p-6 md:p-8">
-        <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-300">
-          <ListChecks className="h-4 w-4" />
-          Suggested actions
-        </div>
-        <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-300">
-          {g.interventions.map((line, i) => (
-            <li key={i} className="pl-1 marker:font-semibold marker:text-indigo-400">
-              {line}
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-500">
-            <BarChart3 className="h-4 w-4 text-amber-400" />
-            Global feature importance (Random Forest)
-          </div>
-          <span className="text-[10px] text-slate-600">Cohort-level; same source as Objective 2</span>
-        </div>
-        <p className="mb-4 text-xs text-slate-500">
-          Top drivers across the dataset. &quot;Your profile&quot; shows this student&apos;s value when the field matches.
-        </p>
-        {g.importanceTop.length === 0 ? (
-          <p className="text-sm text-slate-500">Load the backend and open Objective 2 once — importance list is empty.</p>
-        ) : (
-          <ul className="space-y-3">
-            {g.importanceTop.map((row, i) => {
-              const pct = (row.value / maxImp) * 100;
-              const your =
-                row.idx !== null ? formatProfileFieldDisplay(row.idx, inputs[row.idx] ?? "") : null;
-              const label = row.idx !== null ? FEATURE_DICT[row.idx].name : row.name;
-              return (
-                <li key={`${row.name}-${i}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-semibold text-slate-200">{label}</span>
-                    <span className="tabular-nums text-xs font-bold text-amber-200/90">{row.value.toFixed(1)}%</span>
-                  </div>
-                  {your != null && (
-                    <p className="mb-2 text-[11px] text-slate-500">
-                      Your profile: <span className="font-medium text-slate-400">{your}</span>
-                    </p>
-                  )}
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                    <div
-                      className={`h-full rounded-full ${isFinancialDriverName(label) ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-indigo-500 to-violet-500"}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
 }
 
 function Objective3InsightsPanel({
@@ -1146,12 +835,6 @@ type PredictionsForBehavior = {
   rfVerdict: string;
 };
 
-type SilentDropoutFactor = {
-  label: string;
-  detail: string;
-  tags: ("Profile" | "K-Means" | "RF")[];
-};
-
 function buildSilentDropoutContext(
   predictions: PredictionsForBehavior,
   inputs: string[],
@@ -1164,151 +847,50 @@ function buildSilentDropoutContext(
   const enrolled1 = parseFloat(inputs[22] || "");
   const evals1 = parseFloat(inputs[23] || "");
   const noEval1 = parseFloat(inputs[26] || "");
-
   const debtor = inputs[15] === "1";
   const tuitionLate = inputs[16] === "0";
-  const displaced = inputs[13] === "1";
-  const international = inputs[20] === "1";
 
-  const unemp = parseFloat(inputs[33] || "");
-  const infl = parseFloat(inputs[34] || "");
-  const gdp = parseFloat(inputs[35] || "");
+  const gradeOk = !Number.isNaN(grade) && grade >= 10;
+  const silentNarratives: string[] = [];
 
-  const hasGrade = inputs[25] !== "" && !Number.isNaN(grade);
-  const explicitAcademicFailure = hasGrade && grade > 0 && grade < 10;
-  const notFailingOnPaper = !explicitAcademicFailure;
-
-  const thinEvals =
-    !Number.isNaN(enrolled1) &&
-    enrolled1 > 0 &&
-    !Number.isNaN(evals1) &&
-    evals1 / enrolled1 < 0.55;
-  const severalNoEval = !Number.isNaN(noEval1) && noEval1 >= 2;
-
-  const rfDropout = predictions.rfVerdict === "Dropout Risk";
-  const highDisengagementCluster = cID === "0";
-
-  const factors: SilentDropoutFactor[] = [];
-
-  if (explicitAcademicFailure) {
-    factors.push({
-      label: "CU 1st Sem Grade",
-      tags: ["Profile"],
-      detail: `Average ${grade.toFixed(1)}/20 is below a typical pass line — this is direct academic strain, not a silent-only story.`,
-    });
+  if (cID === "0" && gradeOk) {
+    silentNarratives.push(
+      "Silent dropout pattern: this row maps to the high-disengagement cluster while Semester‑1 grades still sit at or above 10/20. That is exactly the “no obvious failure yet” scenario clustering is meant to surface—pair with debt, evaluations, and attendance."
+    );
+  }
+  if (cID === "0" && !gradeOk && !Number.isNaN(grade) && grade > 0) {
+    silentNarratives.push(
+      "Cluster and grades both point to strain—this is a louder pattern (academic + behavioral archetype)."
+    );
+  }
+  if (!Number.isNaN(enrolled1) && enrolled1 > 0 && !Number.isNaN(evals1) && evals1 / enrolled1 < 0.55) {
+    silentNarratives.push(
+      "Evaluation participation is thin relative to enrollment—students can remain enrolled while quietly skipping assessment windows."
+    );
+  }
+  if (!Number.isNaN(noEval1) && noEval1 >= 2) {
+    silentNarratives.push(
+      "Multiple first-semester units without evaluations increase the chance that struggle stays invisible until late withdrawal or stop-out."
+    );
+  }
+  if ((debtor || tuitionLate) && gradeOk) {
+    silentNarratives.push(
+      "Financial stress (debtor or tuition not current) with passing grades is another classic silent pathway—money friction often precedes transcript collapse."
+    );
   }
 
-  if (cID !== "") {
-    factors.push({
-      label: "K-Means behavior cluster",
-      tags: ["K-Means"],
-      detail:
-        highDisengagementCluster
-          ? `Cluster ${cID} — “${info.name}”. The model groups this student with higher disengagement / friction patterns.`
-          : `Cluster ${cID} — “${info.name}”. Structural neighborhood from unsupervised learning (not a grade by itself).`,
-    });
-  }
+  const rfEcho =
+    predictions.rfVerdict === "Dropout Risk"
+      ? "The supervised Random Forest (Objective 1) also leans toward dropout risk, so behavioral clustering and the overview classifier are directionally consistent."
+      : "The overview Random Forest is not in the dropout class here while K‑Means still places the student in a behavioral segment—use both views: clustering finds structure, RF scores policy thresholds.";
 
-  if (highDisengagementCluster && !rfDropout && notFailingOnPaper) {
-    factors.push({
-      label: "Random Forest (Objective 1)",
-      tags: ["RF", "K-Means"],
-      detail:
-        "RF does not flag Dropout Risk, but K-Means is in the high-disengagement cluster — typical place to check silent drivers (tuition/debt, attendance, withdrawal intent) before grades collapse.",
-    });
-  } else if (rfDropout && !highDisengagementCluster) {
-    factors.push({
-      label: "Random Forest (Objective 1)",
-      tags: ["RF"],
-      detail:
-        "RF flags Dropout Risk while K-Means is not the high-disengagement segment — supervised outcome risk outweighs this cluster persona.",
-    });
-  } else if (rfDropout && highDisengagementCluster) {
-    factors.push({
-      label: "Random Forest (Objective 1)",
-      tags: ["RF"],
-      detail: "RF flags Dropout Risk and K-Means is the high-disengagement cluster — models agree; this is not silent-only.",
-    });
-  } else {
-    factors.push({
-      label: "Random Forest (Objective 1)",
-      tags: ["RF"],
-      detail:
-        "RF is not in the Dropout Risk class and K-Means is not the high-disengagement cluster — rely on the profile factors below if they appear.",
-    });
-  }
+  const methodology = [
+    "K‑Means partitions students into behavior archetypes using the same feature space—useful when labels are noisy or you want to discover cohorts before targeting interventions.",
+    "In research workflows, a Random Forest (or other supervised model) often helps interpret or validate clusters against outcomes; EduGuard surfaces RF separately in Objectives 1–3 while Objective 6 stays unsupervised.",
+    "Clusters are not diagnoses—they are statistical neighborhoods. Always confirm with advisors before messaging students.",
+  ];
 
-  if (debtor) {
-    factors.push({
-      label: "Debtor",
-      tags: ["Profile"],
-      detail: "Owing the institution can force stops or holds even when averages still look acceptable.",
-    });
-  }
-  if (tuitionLate) {
-    factors.push({
-      label: "Tuition Fees Up To Date",
-      tags: ["Profile"],
-      detail: "Tuition not recorded as current — payment friction often drives withdrawal before grades drop.",
-    });
-  }
-  if (displaced) {
-    factors.push({
-      label: "Displaced",
-      tags: ["Profile"],
-      detail: "Away-from-home status can add cost and support gaps that do not show as failing grades immediately.",
-    });
-  }
-  if (international) {
-    factors.push({
-      label: "International",
-      tags: ["Profile"],
-      detail: "Visa, fees, or admin friction can raise silent attrition risk independent of classroom averages.",
-    });
-  }
-
-  if (!Number.isNaN(unemp) && unemp >= 11) {
-    factors.push({
-      label: "Unemployment Rate",
-      tags: ["Profile"],
-      detail: `Local unemployment ${unemp.toFixed(1)}% is elevated — economic pressure on staying enrolled.`,
-    });
-  }
-  if (!Number.isNaN(infl) && infl >= 2.5) {
-    factors.push({
-      label: "Inflation Rate",
-      tags: ["Profile"],
-      detail: `Inflation ${infl.toFixed(1)}% is high — squeezes living costs alongside tuition.`,
-    });
-  }
-  if (!Number.isNaN(gdp) && gdp > 0 && gdp < 1.2) {
-    factors.push({
-      label: "GDP",
-      tags: ["Profile"],
-      detail: `GDP index ${gdp.toFixed(2)} is on the low side — weaker macro context for vulnerable students.`,
-    });
-  }
-
-  if (thinEvals && notFailingOnPaper) {
-    factors.push({
-      label: "CU 1st Sem Evaluations vs enrolled",
-      tags: ["Profile"],
-      detail: `Only ${evals1.toFixed(0)} evaluations for ${enrolled1.toFixed(0)} enrolled units — thin participation before grades may reflect stress.`,
-    });
-  }
-  if (severalNoEval && notFailingOnPaper) {
-    factors.push({
-      label: "CU 1st Sem Without Evaluations",
-      tags: ["Profile"],
-      detail: `${noEval1.toFixed(0)} units have no evaluation — risk can stay off the transcript early.`,
-    });
-  }
-
-  return {
-    cID,
-    info,
-    factors,
-  };
+  return { cID, info, silentNarratives, rfEcho, methodology, gradeOk, debtor, tuitionLate };
 }
 
 function Objective6InsightsPanel({
@@ -1330,55 +912,89 @@ function Objective6InsightsPanel({
     [predictions, inputs, clusterInfoMap]
   );
 
-  const profileFactorCount = ctx.factors.filter((f) => f.tags.includes("Profile")).length;
-
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <ListChecks className="h-5 w-5 shrink-0 text-blue-400" strokeWidth={2} />
-        <h3 className="text-lg font-black text-white">Factors for this student</h3>
-        {profileFactorCount > 0 && (
-          <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            {profileFactorCount} from profile (non‑grade / economic / engagement)
-          </span>
-        )}
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
+        <div className="rounded-3xl border border-blue-500/25 bg-gradient-to-br from-blue-950/40 to-slate-950 p-6 md:p-8">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-blue-300/90">
+            <Eye className="h-4 w-4" />
+            Silent dropout detection (objective intent)
+          </div>
+          <p className="text-sm leading-relaxed text-slate-400">
+            This objective targets students who show <strong className="text-slate-200">disengagement patterns</strong>{" "}
+            without relying solely on obvious academic failure. K‑Means surfaces{" "}
+            <strong className="text-slate-200">behavioral neighborhoods</strong> (e.g., missing evaluations, tuition
+            friction) that can precede transcript damage—aligning with “silent” stop-out research narratives.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500">
+            <Fingerprint className="h-4 w-4 text-cyan-400" />
+            Engagement proxies in this profile
+          </div>
+          {ctx.silentNarratives.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No scripted silent-risk combinations fired on the fields we scan (cluster + grades + evaluations + finances).
+              The assigned cluster still describes the closest behavioral archetype in feature space.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {ctx.silentNarratives.map((s, i) => (
+                <li
+                  key={i}
+                  className="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-3 text-sm leading-relaxed text-slate-300"
+                >
+                  {s}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500">
+            <GitCompare className="h-4 w-4 text-indigo-400" />
+            Cluster vs Random Forest (Objective 1)
+          </div>
+          <p className="text-sm leading-relaxed text-slate-400">{ctx.rfEcho}</p>
+        </div>
       </div>
-      <p className="mb-6 text-xs text-slate-500">
-        <strong className="text-slate-400">Profile</strong> = fields you entered. <strong className="text-slate-400">K‑Means</strong> /{" "}
-        <strong className="text-slate-400">RF</strong> = model outputs.
-      </p>
-      <ul className="space-y-3">
-        {ctx.factors.map((f, idx) => (
-          <li
-            key={`silent-factor-${idx}`}
-            className="rounded-2xl border border-slate-700/90 bg-slate-950/60 px-4 py-4"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold text-white">{f.label}</span>
-              <span className="flex flex-wrap gap-1">
-                {f.tags.map((t) => (
-                  <span
-                    key={t}
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${
-                      t === "Profile"
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : t === "K-Means"
-                          ? "bg-blue-500/15 text-blue-300"
-                          : "bg-indigo-500/15 text-indigo-300"
-                    }`}
-                  >
-                    {t}
-                  </span>
-                ))}
-              </span>
-            </div>
-            <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.detail}</p>
-          </li>
-        ))}
-      </ul>
-      {ctx.factors.length === 0 && (
-        <p className="text-sm text-slate-500">Run analysis to load cluster and model outputs.</p>
-      )}
+
+      <div className="space-y-6">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6 md:p-8">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500">
+            <Layers className="h-4 w-4 text-blue-400" />
+            K‑Means + supervised models in the workflow
+          </div>
+          <ul className="space-y-3 text-sm leading-relaxed text-slate-400">
+            {ctx.methodology.map((m) => (
+              <li key={m} className="flex gap-3">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-3xl border border-indigo-500/20 bg-indigo-950/20 p-6 md:p-8">
+          <p className="text-xs font-bold uppercase tracking-wider text-indigo-300">Practical check</p>
+          <p className="mt-2 text-sm text-slate-400">
+            If the cluster narrative feels mismatched with day-to-day observation, refresh inputs (especially Semester‑1
+            evaluations and financial flags) and re-run analysis—K‑Means is sensitive to feature scale and missing proxies
+            such as LMS logins when they are not in the dataset.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-dashed border-blue-500/30 bg-blue-950/10 p-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-blue-200/90">Intervention framing</p>
+          <p className="mt-2 text-sm text-blue-100/80">
+            Prefer low-stigma nudges (success coaching, study skills, financial counseling) when{" "}
+            <strong className="text-blue-100">silent</strong> signals show up—students may not self-identify as “at risk” if
+            their GPA still looks acceptable on paper.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1395,8 +1011,6 @@ export default function App() {
   // Global Datasets
   const [globalImportance, setGlobalImportance] = useState<any[]>([]);
   const [clusterInfoMap, setClusterInfoMap] = useState<any>({});
-  const [importanceLoaded, setImportanceLoaded] = useState(false);
-  const [importanceError, setImportanceError] = useState<string | null>(null);
   
   // Specific AI Outputs
   const [predictions, setPredictions] = useState({
@@ -1408,26 +1022,27 @@ export default function App() {
     rfBalConfidence: 0,
   });
 
+  // Chatbot State (updated)
+  const [chatMessages, setChatMessages] = useState<{role: string, content: string}[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  // NEW: Full risk assessment state
+  const [fullRiskReport, setFullRiskReport] = useState<any>(null);
+  const [loadingFullRisk, setLoadingFullRisk] = useState(false);
+
+  const handleDownloadPdf = useCallback(() => {
+    if (!isAnalyzed) return;
+    downloadEduGuardObjectivesPdf({
+      predictions,
+      globalImportance,
+      clusterInfoMap,
+      chatMessages,
+    });
+  }, [isAnalyzed, predictions, globalImportance, clusterInfoMap, chatMessages]);
+
   const driversSorted = useMemo(
     () => [...globalImportance].sort((a, b) => Number(b.value) - Number(a.value)),
     [globalImportance]
   );
-
-  const counselorPdfBullets = useMemo(() => {
-    if (!isAnalyzed) return [] as string[];
-    return buildCounselorGuidance(inputs, predictions, driversSorted).pdfBullets;
-  }, [isAnalyzed, inputs, predictions, driversSorted]);
-
-  const handleDownloadPdf = useCallback(() => {
-    if (!isAnalyzed) return;
-    const payload: PdfReportInput = {
-      predictions,
-      globalImportance,
-      clusterInfoMap,
-      counselorGuidanceBullets: counselorPdfBullets,
-    };
-    downloadEduGuardObjectivesPdf(payload);
-  }, [isAnalyzed, predictions, globalImportance, clusterInfoMap, counselorPdfBullets]);
 
   const driverStats = useMemo(() => {
     if (!driversSorted.length) return null;
@@ -1449,29 +1064,8 @@ export default function App() {
 
   // Load backend static data
   useEffect(() => {
-    setImportanceLoaded(false);
-    setImportanceError(null);
-
-    fetch("http://127.0.0.1:5000/importance")
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        setGlobalImportance(Array.isArray(d) ? d : []);
-        setImportanceLoaded(true);
-      })
-      .catch((e) => {
-        setGlobalImportance([]);
-        setImportanceLoaded(true);
-        setImportanceError(e?.message || "Backend unavailable");
-        console.log(e);
-      });
-
-    fetch("http://127.0.0.1:5000/cluster-info")
-      .then((r) => r.json())
-      .then((d) => setClusterInfoMap(d))
-      .catch((e) => console.log(e));
+    fetch("http://127.0.0.1:5000/importance").then(r => r.json()).then(d => setGlobalImportance(d)).catch(e => console.log(e));
+    fetch("http://127.0.0.1:5000/cluster-info").then(r => r.json()).then(d => setClusterInfoMap(d)).catch(e => console.log(e));
   }, []);
 
   const loadDemoStudent = () => {
@@ -1486,16 +1080,11 @@ export default function App() {
     try {
       const payload = inputs.map(v => v === "" ? 0 : parseFloat(v));
       
-      // 1. Overall Risk (RF)
       const overRes = await fetch("http://127.0.0.1:5000/predict", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: "rf", values: payload})}).then(r => r.json());
-      // 2. Early Warning (Logistic)
       const trajRes = await fetch("http://127.0.0.1:5000/predict", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: "logistic", values: payload})}).then(r => r.json());
-      // 3. Behavior (KMeans)
       const clustRes = await fetch("http://127.0.0.1:5000/predict", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: "kmeans", values: payload})}).then(r => r.json());
-      // 4. Strict At-Risk Focus (Balanced RF)
       const atRiskRes = await fetch("http://127.0.0.1:5000/predict", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({model: "rf_bal", values: payload})}).then(r => r.json());
 
-      // Normalize confidence so that 100% means HIGH DROPOUT RISK natively.
       const normalizeRisk = (res: any) => res.result === "Dropout Risk" ? (res.confidence || 0.8) : (1 - (res.confidence || 0.8));
 
       setPredictions({
@@ -1508,12 +1097,68 @@ export default function App() {
       });
 
       setIsAnalyzed(true);
-      setActiveTab("early_risk"); // Auto navigate to results!
+      setActiveTab("early_risk");
       window.scrollTo(0,0);
     } catch(err) {
       alert("Backend error. Are you sure app.py is running on port 5000?");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Chat function (Decision Tree)
+  const handleChat = async () => {
+    if (inputs.some(v => v === "")) {
+      alert("Please fill all student profile fields before asking for AI counseling.");
+      return;
+    }
+
+    setChatLoading(true);
+    try {
+      const payload = inputs.map(v => parseFloat(v));
+      const res = await fetch("http://127.0.0.1:5000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: payload }),
+      });
+      const data = await res.json();
+
+      setChatMessages(prev => [
+        ...prev,
+        { role: "system", content: data.reply }
+      ]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setChatMessages(prev => [
+        ...prev,
+        { role: "system", content: "⚠️ Failed to get AI analysis. Please check backend connection." }
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // NEW: Fetch full risk assessment
+  const fetchFullRiskAssessment = async () => {
+    if (!isAnalyzed) {
+      alert("Please analyze a profile first.");
+      return;
+    }
+    setLoadingFullRisk(true);
+    try {
+      const payload = inputs.map(v => parseFloat(v));
+      const res = await fetch("http://127.0.0.1:5000/full-risk-assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: payload }),
+      });
+      const data = await res.json();
+      setFullRiskReport(data);
+    } catch (error) {
+      console.error("Full risk assessment error:", error);
+      alert("Failed to load full risk assessment. Is the backend running?");
+    } finally {
+      setLoadingFullRisk(false);
     }
   };
 
@@ -1678,26 +1323,11 @@ export default function App() {
               </div>
             </div>
 
-            {!importanceLoaded ? (
+            {!driversSorted.length ? (
               <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/30 p-16 text-center">
                 <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-amber-500/60" />
                 <p className="font-semibold text-slate-300">Loading driver rankings…</p>
-                <p className="mt-2 text-sm text-slate-500">Fetching `/importance` from the Flask backend.</p>
-              </div>
-            ) : importanceError ? (
-              <div className="rounded-3xl border border-rose-500/25 bg-rose-950/15 p-10 text-center">
-                <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-rose-400" />
-                <p className="font-semibold text-rose-200">Objective 2 cannot load drivers.</p>
-                <p className="mt-2 text-sm text-rose-200/70">
-                  Backend error: <span className="font-mono">{importanceError}</span>. Start `python app.py` (port 5000) and refresh.
-                </p>
-              </div>
-            ) : !driversSorted.length ? (
-              <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/30 p-12 text-center">
-                <p className="font-semibold text-slate-300">No driver data returned.</p>
-                <p className="mt-2 text-sm text-slate-500">
-                  The backend responded, but returned an empty importance list. Check that `models/rf.pkl` loaded and `/importance` returns data.
-                </p>
+                <p className="mt-2 text-sm text-slate-500">Ensure the Flask backend is running on port 5000.</p>
               </div>
             ) : (
               <>
@@ -1973,25 +1603,146 @@ export default function App() {
         );
 
       case "counselor":
+        // Helper for risk badge styling
+        const getRiskBadgeClass = (level: string) => {
+          switch (level) {
+            case "High": return "bg-red-900/60 text-red-200 border-red-700";
+            case "Medium": return "bg-yellow-900/60 text-yellow-200 border-yellow-700";
+            case "Low": return "bg-green-900/60 text-green-200 border-green-700";
+            default: return "bg-slate-700 text-slate-300 border-slate-600";
+          }
+        };
+
         return (
-          <div className="space-y-6 animate-in fade-in duration-500 pb-8">
-            <div>
-              <h2 className="flex items-center gap-3 text-3xl font-black text-white">
-                <BrainCircuit className="text-purple-400" /> Objective 4: Counselor guidance
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                One-page summary: model readouts for this student, <strong className="text-slate-300">custom messages</strong> from
-                your inputs, suggested actions, and <strong className="text-slate-300">global Random Forest feature importance</strong>{" "}
-                (with your values where fields match).
-              </p>
+          <div className="space-y-6 animate-in fade-in duration-500 h-full">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-white flex items-center gap-3">
+                  <BrainCircuit className="text-purple-400" /> Objective 4: AI Counselor
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">
+                  Explainable decision support using a Decision Tree. Get a transparent analysis of why this student is predicted at risk and what interventions are suggested.
+                </p>
+              </div>
+              <button
+                onClick={fetchFullRiskAssessment}
+                disabled={!isAnalyzed || loadingFullRisk}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-semibold flex items-center gap-2 transition"
+              >
+                {loadingFullRisk ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+                {loadingFullRisk ? "Loading..." : "Full Risk Assessment"}
+              </button>
             </div>
 
-            <Objective4GuidancePanel
-              isAnalyzed={isAnalyzed}
-              inputs={inputs}
-              predictions={predictions}
-              driversSorted={driversSorted}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* LEFT PANEL: Chat (Decision Tree output) */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden h-[600px]">
+                <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <GitCompare className="h-4 w-4 text-purple-400" />
+                    Decision Tree Analysis
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Rule‑based explanation for this student</p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center text-slate-500 mt-20">
+                      <BrainCircuit className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <p>Click the button below to get an AI‑powered explainable analysis.</p>
+                      <p className="text-xs mt-2">The Decision Tree will show the exact rules behind its prediction.</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, i) => (
+                      <div key={i} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                        <div className="text-[10px] font-black uppercase text-purple-400 mb-2 tracking-widest flex items-center gap-2">
+                          <BrainCircuit className="h-3 w-3" /> EduGuard AI (Decision Tree)
+                        </div>
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap text-slate-200">
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {chatLoading && (
+                    <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                        <span className="text-sm text-slate-300">Analyzing student data...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="p-6 border-t border-slate-800 bg-slate-900/60">
+                  <button
+                    onClick={handleChat}
+                    disabled={!isAnalyzed || chatLoading}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg"
+                  >
+                    {chatLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <BrainCircuit className="h-5 w-5" />}
+                    {chatLoading ? "Generating insights..." : "Get AI Counseling Insight"}
+                  </button>
+                  <p className="text-xs text-center text-slate-500 mt-3">
+                    Uses the Decision Tree model – every prediction is fully explainable.
+                  </p>
+                </div>
+              </div>
+
+              {/* RIGHT PANEL: Full Risk Assessment Table */}
+              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden h-[600px]">
+                <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-emerald-400" />
+                    Full Risk Assessment (Top 10 Features)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Based on Random Forest global importance & risk thresholds from official dataset
+                  </p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                  {!fullRiskReport ? (
+                    <div className="text-center text-slate-500 mt-20">
+                      <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <p>Click the <strong>Full Risk Assessment</strong> button above to see a detailed breakdown.</p>
+                      <p className="text-xs mt-2">Shows risk level (High/Medium/Low) for the top 10 most important features.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {fullRiskReport.top_risks.map((item: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="border border-slate-700 rounded-xl p-4 bg-slate-800/30 hover:bg-slate-800/50 transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-xs text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
+                                  #{idx+1}
+                                </span>
+                                <span className="font-bold text-white">{item.feature}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full border ${getRiskBadgeClass(item.risk_level)}`}>
+                                  {item.risk_level} Risk
+                                </span>
+                              </div>
+                              <div className="mt-2 text-sm text-slate-300">
+                                Value: <span className="font-mono text-amber-300">{item.value}</span>
+                                <span className="mx-2 text-slate-600">|</span>
+                                Importance: <span className="font-mono text-indigo-300">{item.importance.toFixed(1)}%</span>
+                              </div>
+                              <p className="mt-2 text-xs text-slate-400 leading-relaxed">{item.explanation}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 border-t border-slate-800 bg-slate-900/60 text-center">
+                  <p className="text-[10px] text-slate-500">
+                    Risk levels are based on thresholds from the official student dropout dataset (4,424 students).
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         );
 
@@ -2038,23 +1789,68 @@ export default function App() {
         
       case "behavior":
         return (
-          <div className="space-y-6 animate-in fade-in duration-500 pb-8">
+          <div className="space-y-8 animate-in fade-in duration-500 pb-8">
             <div>
               <h2 className="flex items-center gap-3 text-3xl font-black text-white">
-                <Zap className="text-blue-400" /> Objective 6: Silent dropout
+                <Zap className="text-blue-400" /> Objective 6: Silent dropout &amp; behavior pattern
               </h2>
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                Disengagement without obvious failing grades. Factors = your profile (finance, engagement, macro) plus{" "}
-                <strong className="text-slate-300">K‑Means</strong> and <strong className="text-slate-300">Random Forest</strong>{" "}
-                (Objective 1).
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                <strong className="text-slate-300">Goal:</strong> surface disengagement-style patterns that may appear{" "}
+                <strong className="text-slate-300">before obvious academic failure</strong>. <strong className="text-slate-300">K‑Means</strong>{" "}
+                defines behavioral neighborhoods; <strong className="text-slate-300">Random Forest</strong> is used elsewhere in
+                EduGuard (Objectives 1–3) to score outcomes—this tab keeps the original cluster readout and adds interpretation
+                aligned with that research split.
               </p>
+            </div>
+
+            <div className="flex flex-col items-center gap-10 rounded-3xl border border-slate-800 bg-slate-900/40 p-10 md:flex-row">
+              <div className="flex w-full flex-col items-center justify-center rounded-[2rem] border border-blue-900/50 bg-blue-950/20 p-8 md:w-1/3">
+                <p className="mb-4 text-sm font-bold uppercase tracking-widest text-blue-300/60">Cluster ID</p>
+                <p className="text-6xl font-black text-blue-400">{predictions.kmeansCluster.split(" ")[1] || "?"}</p>
+              </div>
+
+              <div className="w-full md:w-2/3">
+                {(() => {
+                  const cID = predictions.kmeansCluster.split(" ")[1];
+                  const raw = clusterInfoMap[cID] || {
+                    name: "Pending",
+                    description: "Waiting for analysis",
+                    traits: [],
+                  };
+                  const info = {
+                    ...raw,
+                    traits: Array.isArray(raw.traits) ? raw.traits : [],
+                  };
+                  return (
+                    <div className="space-y-4">
+                      <h3 className="text-3xl font-black text-white">{info.name}</h3>
+                      <p className="text-lg leading-relaxed text-slate-300">{info.description}</p>
+
+                      <div className="pt-6">
+                        <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Key identifiers</p>
+                        <div className="flex flex-wrap gap-2">
+                          {info.traits.map((t: string) => (
+                            <span
+                              key={t}
+                              className="rounded-full border border-slate-700 bg-slate-800 px-4 py-1.5 text-xs font-bold text-indigo-300"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
 
             <Objective6InsightsPanel predictions={predictions} inputs={inputs} clusterInfoMap={clusterInfoMap} />
           </div>
         );
 
-      default: return null;
+      default:
+        return null;
     }
   };
 
@@ -2094,9 +1890,9 @@ export default function App() {
                <NavItem disabled={!isAnalyzed} id="early_risk" icon={<Activity size={18}/>} label="1. Status & Overview" />
                <NavItem disabled={!isAnalyzed} id="financial" icon={<DollarSign size={18}/>} label="2. Underlying Drivers" />
                <NavItem disabled={!isAnalyzed} id="at_risk" icon={<ShieldAlert size={18}/>} label="3. Strict Anomalies" />
-               <NavItem disabled={!isAnalyzed} id="counselor" icon={<BrainCircuit size={18}/>} label="4. Counselor guidance" />
+               <NavItem disabled={!isAnalyzed} id="counselor" icon={<BrainCircuit size={18}/>} label="4. Counselor Chat" />
                <NavItem disabled={!isAnalyzed} id="early_warning" icon={<AlertCircle size={18}/>} label="5. Early warning" />
-               <NavItem disabled={!isAnalyzed} id="behavior" icon={<Zap size={18}/>} label="6. Silent dropout" />
+               <NavItem disabled={!isAnalyzed} id="behavior" icon={<Zap size={18}/>} label="6. Silent / behavior" />
              </div>
            </div>
         </nav>
@@ -2111,7 +1907,7 @@ export default function App() {
         {/* Ambient Gradient */}
         <div className="absolute top-0 left-1/4 w-3/4 h-[500px] bg-indigo-900/10 rounded-full blur-[120px] pointer-events-none" />
 
-        <div className="relative z-10 mx-auto min-h-full max-w-6xl px-6 pb-24 pt-6 md:px-12 md:pt-8">
+        <div className="relative z-10 mx-auto min-h-full max-w-7xl px-6 pb-24 pt-6 md:px-12 md:pt-8">
           <div className="sticky top-0 z-30 -mx-1 mb-6 flex flex-wrap items-center justify-end gap-3 border-b border-slate-800/60 bg-[#0a0f1e]/90 px-1 py-3 backdrop-blur-md md:-mx-2 md:px-2">
             <button
               type="button"

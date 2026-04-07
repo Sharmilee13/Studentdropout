@@ -13,7 +13,8 @@ export type PdfReportInput = {
   predictions: PdfReportPredictions;
   globalImportance: { name: string; value: number }[];
   clusterInfoMap: Record<string, { name?: string; description?: string; traits?: string[] }>;
-  chatMessages: { role: string; content: string }[];
+  /** Objective 4: structured guidance lines (replaces legacy chat transcript). */
+  counselorGuidanceBullets?: string[];
 };
 
 function safeText(s: string): string {
@@ -116,16 +117,13 @@ export function downloadEduGuardObjectivesPdf(data: PdfReportInput): void {
         : "Does not exceed the strict alert threshold (60%) used in the app.")
   );
 
-  addTitle(13, true, "Objective 4 - Counselor chat");
-  const msgs = data.chatMessages.filter((m) => m.role === "user" || m.role === "system");
-  if (msgs.length === 0) {
-    addLines(10, "No chat messages recorded for this session.");
+  addTitle(13, true, "Objective 4 - Counselor guidance (inputs + models + actions)");
+  const bullets = data.counselorGuidanceBullets ?? [];
+  if (bullets.length === 0) {
+    addLines(10, "No guidance summary (analyze a profile first, or backend offline).");
   } else {
-    addLines(10, `Conversation excerpt (${msgs.length} message(s)):`);
-    msgs.slice(-20).forEach((m) => {
-      const role = m.role === "user" ? "User" : "Assistant";
-      addLines(9, `${role}: ${m.content}`, 4);
-    });
+    addLines(10, "Summary bullets:");
+    bullets.forEach((b) => addBullet(10, b));
   }
 
   addTitle(13, true, "Objective 5 - Lightweight early warning (logistic, Semester 1 lens)");
@@ -143,8 +141,11 @@ export function downloadEduGuardObjectivesPdf(data: PdfReportInput): void {
   const cDesc = typeof raw.description === "string" ? raw.description : "";
   const traits = Array.isArray(raw.traits) ? raw.traits.filter((t) => typeof t === "string") : [];
 
-  addTitle(13, true, "Objective 6 - Silent dropout / behavior (K-Means)");
-  addLines(10, `Assigned cluster ID: ${cID || "?"}. Label: ${cName}.`);
+  addTitle(13, true, "Objective 6 - Silent dropout detection (K-Means + Random Forest)");
+  addLines(
+    10,
+    `Cluster (K-Means): ID ${cID || "?"}, label ${cName}. Overview RF (Obj 1): ${p.rfVerdict || "N/A"}, score ${(p.rfConfidence * 100).toFixed(1)}%.`
+  );
   if (cDesc) addLines(10, cDesc);
   if (traits.length) {
     addLines(10, "Key identifiers:");
